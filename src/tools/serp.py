@@ -1,6 +1,6 @@
-from ..config.logging import logger
+from src import logger
 from typing import Tuple, Union, Dict, List, Any
-from ..config.settings import Config
+from config.settings import Config
 import httpx
 import json
 
@@ -28,7 +28,7 @@ class SerpAPIClient:
             logger.error(f"HTTP Error: {e}")
             return e.response.status_code, e.response.text
 
-def format_top_search_results(self, results: Dict[str, Any], top_n: int = 10) -> List[Dict[str, Any]]:
+def format_top_search_results(results: Dict[str, Any], top_n: int = 10) -> List[Dict[str, Any]]:
     return [
     {
         "position": result.get('position'),
@@ -39,7 +39,7 @@ def format_top_search_results(self, results: Dict[str, Any], top_n: int = 10) ->
     for result in results.get('organic_results', [])[:top_n]
 ]
         
-def search(self, search_query: str, location: str = "") -> str:
+def search(search_query: str, location: str = "") -> str:
     
     serp_client = SerpAPIClient()
     
@@ -58,4 +58,8 @@ if __name__ == "__main__":
     search_query = "Best punjabi cuisine in surat."
     result_json = search(search_query, '')
     print(result_json)
+    
+    if "error" not in result_json:
+        with open("../../data/tool_output/serp_search_results.json", "w") as f:
+            f.write(result_json)
         

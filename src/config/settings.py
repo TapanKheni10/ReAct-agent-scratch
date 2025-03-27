@@ -7,5 +7,6 @@ class Settings(BaseSettings):
     )
 
     SERP_API_KEY: str
+    GROQ_API_KAY: str
     
 Config = Settings()

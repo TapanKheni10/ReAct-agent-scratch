@@ -87,18 +87,29 @@ def web_scrape(url: str) -> str:
         str: The scraped text content.
     """
     try:
-        with httpx.Client(verify = False) as client:
+        with httpx.Client(timeout=1000.0, verify = False) as client:
             response = client.get(url)
             response.raise_for_status()
+            html_content = response.text
             
-            soup = BeautifulSoup(response.text, 'html.parser')
+            # Parse HTML with BeautifulSoup
+            soup = BeautifulSoup(html_content, 'html.parser')
             
-            # for script in soup(["script", "style", "nav", "header", "footer"]):
-            #     script.decompose()
+            # Remove script and style elements
+            for script in soup(["script", "style"]):
+                script.extract()
             
-            text = soup.get_text(separator=' ', strip=True)
+            # Get text
+            text = soup.get_text()
             
-            text = re.sub(r'\s+', ' ', text)
+            # Break into lines and remove leading and trailing space on each
+            lines = (line.strip() for line in text.splitlines())
+            
+            # Break multi-headlines into a line each
+            chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+            
+            # Remove blank lines
+            text = '\n'.join(chunk for chunk in chunks if chunk)
             
             return text[:5000]
     
@@ -125,42 +136,41 @@ def google_search(search_query: str, location: str = "") -> str:
     if isinstance(results, Dict):
         top_results = format_top_search_results(results=results)
         
-        # enriched_results = []
-        # for result in top_results[:3]:
-        #     try:
-        #         scraped_content = web_scrape(result['link'])
+        enriched_results = []
+        for result in top_results[:3]:
+            try:
+                scraped_content = web_scrape(result['link'])
                 
-        #         summary_prompt = f"""
-        #         Summarize the following web content in a concise and informative way.
-        #         Focus on extracting key facts, insights, and main points.
+                summary_prompt = f"""
+                Summarize the following web content in a concise and informative way.
+                Focus on extracting key facts, insights, and main points.
                 
-        #         Content from: {result['title']}
-        #         {scraped_content}
-        #         """
+                Content from: {result['title']}
+                {scraped_content}
+                """
                 
-        #         summary = generate(
-        #             model=Groq(api_key=Config.GROQ_API_KEY),
-        #             system_prompt="You are a helpful assistant that summarizes web content accurately and concisely.",
-        #             content=summary_prompt
-        #         )
+                summary = generate(
+                    system_prompt="You are a helpful assistant that summarizes web content accurately and concisely.",
+                    content=summary_prompt
+                )
                 
-        #         enriched_result = {
-        #             "position": result.get('position'),
-        #             "title": result.get('title'),
-        #             "link": result.get('link'),
-        #             "snippet": result.get('snippet'),
-        #             "summary": summary
-        #         }
-        #         enriched_results.append(enriched_result)
+                enriched_result = {
+                    "position": result.get('position'),
+                    "title": result.get('title'),
+                    "link": result.get('link'),
+                    "snippet": result.get('snippet'),
+                    "summary": summary
+                }
+                enriched_results.append(enriched_result)
                 
-        #     except Exception as e:
-        #         logger.error(f"Error processing result {result['link']}: {e}")
-        #         # Still include the result without summary if there's an error
-        #         enriched_results.append(result)
+            except Exception as e:
+                logger.error(f"Error processing result {result['link']}: {e}")
+                # Still include the result without summary if there's an error
+                enriched_results.append(result)
                 
         response = {
             "top_results": top_results,
-            "enriched_results": {}
+            "enriched_results": enriched_results
         }
             
         return json.dumps(response, indent=4)
@@ -170,16 +180,12 @@ def google_search(search_query: str, location: str = "") -> str:
         logger.error(error_json)
         return error_json, {}
     
-    # serper_search = SerpAPIWrapper(serpapi_api_key = Config.SERP_API_KEY)
-    
-    # return serper_search.run(search_query)
-    
     
 if __name__ == "__main__":
     """
     Executes a sample search query and writes the results to a JSON file if successful.
     """
-    search_query = "lates news about crypto market."
+    search_query = "what happend to donald trump recently?"
     serper_search_results = google_search(search_query, '')
     print(serper_search_results)
     print('='*50)

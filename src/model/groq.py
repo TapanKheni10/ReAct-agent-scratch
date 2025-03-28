@@ -181,7 +181,11 @@ def generate(content: str, system_prompt: str):
             response = client.post(groq_chat_url, headers=headers, json=payload)
             response.raise_for_status()
             response_data = response.json()["choices"][0]["message"]["content"]
-            return json.loads(response_data)
+            return response_data
+        
+    except httpx.HTTPStatusError as e:
+        logger.error(f"An HTTP error occurred while generating the response. {e.response.text}")
+        raise e
         
     except Exception as e:
         logger.error(f"An error occurred while generating the response.")

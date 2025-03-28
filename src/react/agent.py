@@ -166,44 +166,44 @@ class Agent:
                             ]
                         }
                     },
-                    # {
-                    #     "query": "What happend in the recent match between RR and KKR?",
-                    #     "response": {
-                    #         "requires_tools": True,
-                    #         "thought": "I need to use the Google search tool to get information about the recent match between RR and KKR.",
-                    #         "plan": [
-                    #             "Use Google search tool to search for information about the recent match between RR and KKR",
-                    #             "Return the result from Google"
-                    #         ],
-                    #         "tool_calls": [
-                    #             {
-                    #                 "tool": "google_search",
-                    #                 "args": {
-                    #                     "search_query" : "recent match between RR and KKR"
-                    #                 }
-                    #             }
-                    #         ]
-                    #     }
-                    # },
-                    # {
-                    #     "query" : "what happend to donald trump recently?",
-                    #     "response": {
-                    #         "requires_tools": True,
-                    #         "thought": "I need to use the Google search tool to get information about Donald Trump.",
-                    #         "plan": [
-                    #             "Use Google search tool to search for information about Donald Trump",
-                    #             "Return the result from Google"
-                    #         ],
-                    #         "tool_calls": [
-                    #             {
-                    #                 "tool": "google_search",
-                    #                 "args": {
-                    #                     "search_query" : "recent news about Donald Trump"
-                    #                 }
-                    #             }
-                    #         ]
-                    #     }
-                    # },
+                    {
+                        "query": "What happend in the recent match between RR and KKR?",
+                        "response": {
+                            "requires_tools": True,
+                            "thought": "I need to use the Google search tool to get information about the recent match between RR and KKR.",
+                            "plan": [
+                                "Use Google search tool to search for information about the recent match between RR and KKR",
+                                "Return the result from Google"
+                            ],
+                            "tool_calls": [
+                                {
+                                    "tool": "google_search",
+                                    "args": {
+                                        "search_query" : "recent match between RR and KKR"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "query" : "what happend to donald trump recently?",
+                        "response": {
+                            "requires_tools": True,
+                            "thought": "I need to use the Google search tool to get information about Donald Trump.",
+                            "plan": [
+                                "Use Google search tool to search for information about Donald Trump",
+                                "Return the result from Google"
+                            ],
+                            "tool_calls": [
+                                {
+                                    "tool": "google_search",
+                                    "args": {
+                                        "search_query" : "recent news about Donald Trump"
+                                    }
+                                }
+                            ]
+                        }
+                    },
                 ]
             }
         }
@@ -370,17 +370,14 @@ def main():
     from tools.wiki import wikipedia_search
     
     agent = Agent()
-    # agent.add_tool(google_search)
+    agent.add_tool(google_search)
     agent.add_tool(wikipedia_search)
     
-    query_list = ["who developed the first computer?"]
+    query_list = ["what happen to donald trump recently?"]
     
     for query in query_list:
         print(f"\nQuery: {query}")
         result = agent.execute(query)
-        print("=*"*20)
-        print(result)
-        print("=*"*20)
 
 if __name__ == "__main__":
     main() 

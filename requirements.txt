@@ -1,4 +1,11 @@
 pydantic
 groq
+wikipedia
+typing-extensions>=4.0.0
+httpx
+langchain-community
+langchain
+beautifulsoup4
+google-search-results
 
--e .
+# -e .

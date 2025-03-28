@@ -118,38 +118,61 @@ def google_search(search_query: str, location: str = "") -> str:
     Returns:
         str: A JSON string containing the formatted search results or an error message.
     """
-    # serp_client = SerpAPIClient()
+    serp_client = SerpAPIClient()
     
-    # results = serp_client(query=search_query, location=location)
+    results = serp_client(query=search_query, location=location)
     
-    # if isinstance(results, Dict):
-    #     top_results = format_top_search_results(results=results)
+    if isinstance(results, Dict):
+        top_results = format_top_search_results(results=results)
         
-    #     system_prompt = "You are text summarizing assistant the top search results to generate structured data."
-    #     scraped_data = []
-    #     for result in top_results[:3]:
-    #         scraped_text = web_scrape(result['link'])
-    #         stuctured_data = generate(
-    #             model = Groq(api_key = Config.GROQ_API_KEY), 
-    #             system_prompt = system_prompt,
-    #             content = scraped_text
-    #         )
+        # enriched_results = []
+        # for result in top_results[:3]:
+        #     try:
+        #         scraped_content = web_scrape(result['link'])
+                
+        #         summary_prompt = f"""
+        #         Summarize the following web content in a concise and informative way.
+        #         Focus on extracting key facts, insights, and main points.
+                
+        #         Content from: {result['title']}
+        #         {scraped_content}
+        #         """
+                
+        #         summary = generate(
+        #             model=Groq(api_key=Config.GROQ_API_KEY),
+        #             system_prompt="You are a helpful assistant that summarizes web content accurately and concisely.",
+        #             content=summary_prompt
+        #         )
+                
+        #         enriched_result = {
+        #             "position": result.get('position'),
+        #             "title": result.get('title'),
+        #             "link": result.get('link'),
+        #             "snippet": result.get('snippet'),
+        #             "summary": summary
+        #         }
+        #         enriched_results.append(enriched_result)
+                
+        #     except Exception as e:
+        #         logger.error(f"Error processing result {result['link']}: {e}")
+        #         # Still include the result without summary if there's an error
+        #         enriched_results.append(result)
+                
+        response = {
+            "top_results": top_results,
+            "enriched_results": {}
+        }
             
-    #         scraped_data.append({
-    #             "search_result": result,
-    #             "structured_data": stuctured_data
-    #         })
-            
-    #     return json.dumps({"top_results": top_results}, indent=4), json.dumps({"scraped_data": scraped_data}, indent=4)
-    # else:
-    #     status_code, error_message = results
-    #     error_json = json.dumps({"error": f"Search failed with status code {status_code}: {error_message}"})
-    #     logger.error(error_json)
-    #     return error_json, {}
+        return json.dumps(response, indent=4)
+    else:
+        status_code, error_message = results
+        error_json = json.dumps({"error": f"Search failed with status code {status_code}: {error_message}"})
+        logger.error(error_json)
+        return error_json, {}
     
-    serper_search = SerpAPIWrapper(serpapi_api_key = Config.SERP_API_KEY)
+    # serper_search = SerpAPIWrapper(serpapi_api_key = Config.SERP_API_KEY)
     
-    return serper_search.run(search_query)
+    # return serper_search.run(search_query)
     
     
 if __name__ == "__main__":
@@ -157,15 +180,11 @@ if __name__ == "__main__":
     Executes a sample search query and writes the results to a JSON file if successful.
     """
     search_query = "lates news about crypto market."
-    # serper_search_results, scraped_results = google_search(search_query, '')
     serper_search_results = google_search(search_query, '')
-    print(serper_search_results[0])
+    print(serper_search_results)
     print('='*50)
-    print(type(serper_search_results[0]))
-    # print(scraped_results)
+    print(type(serper_search_results))
     
-    # if "error" not in serper_search_results:
-    #     with open("../../data/tool_output/serp_search_results.json", "w") as f:
-    #         f.write(serper_search_results)
-        # with open("../../data/tool_output/scraped_results.json", "w") as f:
-        #     f.write(scraped_results)
+    if "error" not in serper_search_results:
+        with open("../../data/tool_output/serp_search_results.json", "w") as f:
+            f.write(serper_search_results)

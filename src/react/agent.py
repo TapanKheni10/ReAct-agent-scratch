@@ -13,6 +13,11 @@ class Interaction:
     timestamp: datetime
     query: str
     plan: Dict[str, Any]
+    reflection_history: List[Dict[str, Any]] = None
+    
+    def __post_init__(self):
+        if self.reflection_history is None:
+            self.reflection_history = []
     
 class Agent:
     def __init__(self):
@@ -260,7 +265,7 @@ class Agent:
             {json.dumps(reflection_prompt, indent=4)}
         """
     
-    def execute(self, user_query: str) -> str:
+    def execute(self, user_query: str, max_reflection_iterations: int = 3) -> str:
         """Execute the full pipeline: plan and execute tools."""
         
         result = safety_check(content = user_query)
@@ -268,61 +273,73 @@ class Agent:
             return "the answer contains harmful content."
         
         try:
-            plan = get_plan(user_query = user_query, system_prompt = self.create_system_prompt())
-            logger.info(f"Plan: {plan}")
+            initial_plan = get_plan(user_query = user_query, system_prompt = self.create_system_prompt())
+            logger.info(f"Initial Plan: {initial_plan}")
             
             self.interaction_history.append(Interaction(
                 timestamp = datetime.now(),
                 query = user_query,
-                plan = plan
+                plan = initial_plan
             ))
             
             logger.info(f'Interaction history: {self.interaction_history}')
             
-            reflection_result = reflect_on_plan(system_prompt = self.create_system_prompt(), reflection_prompt = self.create_reflection_prompt())
+            if not initial_plan.get("requires_tools", True):
+                logger.info("Initial plan doesn't require tools. Skipping reflection loop.")
+                return initial_plan["direct_response"]
             
-            # if not plan.get("requires_tools", True):
-            #     return plan["direct_response"]
+            current_plan = initial_plan
+            reflection_history = []
             
-            # results = []
-            # for tool_call in plan["tool_calls"]:
-            #     tool_name = tool_call["tool"]
-            #     tool_args = tool_call["args"]
-            #     result = self.use_tool(tool_name, **tool_args)
-            #     results.append(result)
+            for iteration in range(max_reflection_iterations):
+                self.interaction_history[-1].plan = current_plan
                 
-            # return f"""
-            #     Thought: {plan['thought']} 
-            #     Plan: {'. '.join(plan['plan'])} 
-            #     Results: {'. '.join(results)}
-            # """
+                try:
+                    reflection_result = reflect_on_plan(
+                        system_prompt = self.create_system_prompt(),
+                        reflection_prompt = self.create_reflection_prompt()
+                    )
+                    logger.info(f"Reflection {iteration + 1} Result: {reflection_result}")
+                
+                    reflection_history.append(reflection_result)
+                    
+                    if not reflection_result.get("requires_changes", False):
+                        logger.info("No changes required. Exiting reflection loop.")
+                        break
+                    
+                    revised_plan = get_plan(
+                        user_query = user_query,
+                        system_prompt = self.create_system_prompt(),
+                        initial_plan = current_plan,
+                        reflection_feedback = reflection_result
+                    )
+                    
+                    if not revised_plan:
+                        logger.info(f"Failed to generate revised plan after reflection {iteration+1}")   
+                        continue
+                    
+                    logger.info(f"Revised Plan after reflection {iteration+1}: {revised_plan}")
+                    
+                    current_plan = revised_plan
+                
+                except Exception as e:
+                    logger.error(f"Error during reflection iteration {iteration+1}: {e}")
+                    reflection_history.append({
+                        "reflection": f"Reflection failed due to error: {str(e)}",
+                        "requires_changes": False
+                    })
+                    
+                    continue
+                
+            final_plan = current_plan
             
-            if reflection_result.get("require_changes", False):
-                
-                reflected_plan = get_plan(
-                    user_query = user_query, 
-                    system_prompt = self.create_system_prompt(), 
-                    initial_plan = plan, 
-                    reflection_feedback = reflection_result
-                )
-                
-                logger.info(f'reflected plan after changes: {reflected_plan}')
-                
-                if reflected_plan:
-                    final_plan = reflected_plan
-                else:
-                    final_plan = plan
-    
-            else:
-                final_plan = plan
-                
             self.interaction_history[-1].plan = {
-                "initial_plan": plan,
-                "reflection": reflection_result,
+                "initial_plan": initial_plan,
+                "reflection": reflection_history,
                 "final_plan": final_plan
             }
             
-            logger.info(f'Interaction history: {self.interaction_history}')
+            logger.info(f'Final interaction history: {self.interaction_history}')
             
             if not final_plan.get("requires_tools", True):
                 return final_plan["direct_response"]
@@ -334,7 +351,14 @@ class Agent:
                 result = self.use_tool(tool_name, **tool_args)
                 results.append(result)
                 
-            return f"""Initial Thought: {plan['thought']}\n\nInitial Plan: {'. '.join(plan['plan'])}\n\nReflection: {reflection_result.get('reflection', 'No improvements suggested')}\n\nFinal Plan: {'. '.join(final_plan['plan'])}\n\nResults: {'. '.join(results)}
+            logger.info(f"Results: {results}")
+                
+            reflection_summary = "\n\n".join([
+                f"Reflection {i+1}: {reflection['reflection']}" 
+                for i, reflection in enumerate(reflection_history)
+            ])
+                
+            return f"""Initial Thought: {initial_plan['thought']}\n\nInitial Plan: {'. '.join(initial_plan['plan'])}\n\nReflection Process: {reflection_summary}\n\nFinal Plan: {'. '.join(final_plan['plan'])}\n\nResults: {'. '.join(results)}
             """
             
         except Exception as e:
@@ -349,7 +373,7 @@ def main():
     # agent.add_tool(google_search)
     agent.add_tool(wikipedia_search)
     
-    query_list = ["what happend to donald trump recently?"]
+    query_list = ["who developed the first computer?"]
     
     for query in query_list:
         print(f"\nQuery: {query}")

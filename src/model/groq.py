@@ -36,6 +36,16 @@ def get_plan(user_query: str, system_prompt: str, initial_plan: Dict = None, ref
         
     try:
         if initial_plan and reflection_feedback:
+            
+            revision_prompt = (
+                f"I need you to revise the following plan based on reflection feedback.\n\n"
+                f"Original query: {user_query}\n\n"
+                f"Current plan: {json.dumps(initial_plan, indent=2)}\n\n"
+                f"Reflection feedback: {json.dumps(reflection_feedback, indent=2)}\n\n"
+                f"Please provide a revised plan that addresses the feedback. "
+                f"Focus specifically on the issues mentioned in the reflection."
+            )
+            
             messages = [
                 {
                     "role": "system",
@@ -51,7 +61,7 @@ def get_plan(user_query: str, system_prompt: str, initial_plan: Dict = None, ref
                 },
                 {
                     "role": "user",
-                    "content": f"Please revise the plan based on this feedback: {json.dumps(reflection_feedback)}",
+                    "content": revision_prompt
                 }
             ]
         else:

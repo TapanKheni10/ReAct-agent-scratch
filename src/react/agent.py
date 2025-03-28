@@ -1,15 +1,24 @@
-from groq import Groq
-from config.settings import Config
 from typing import Dict, List
 from tools.tool_registery import Tool
 import json
+from typing import Any
 from config.logging import logger
-from model.groq import safety_check, get_plan
+from model.groq import safety_check, get_plan, reflect_on_plan
+from dataclasses import dataclass
+from datetime import datetime
 
+@dataclass
+class Interaction:
+    """Record of a single interaction with the agent"""
+    timestamp: datetime
+    query: str
+    plan: Dict[str, Any]
+    
 class Agent:
     def __init__(self):
         """Initialize Agent with empty tool registry."""
         self.tools: Dict[str, Tool] = {}
+        self.interaction_history: List[Interaction] = []
         
     def add_tool(self, tool: Tool) -> None:
         """Register a new tool with the agent."""
@@ -34,12 +43,14 @@ class Agent:
             "capabilities": [
                 "Using provided tools to help users when necessary",
                 "Responding directly without tools for questions that don't require tool usage",
-                "Planning efficient tool usage sequences"
+                "Planning efficient tool usage sequences",
+                "If asked by the user, reflecting on the plan and suggesting changes if needed"
             ],
             "instructions": [
                 "Use tools only when they are necessary for the task",
                 "If a query can be answered directly, respond with a simple message instead of using tools",
-                "When tools are needed, plan their usage efficiently to minimize tool calls"
+                "When tools are needed, plan their usage efficiently to minimize tool calls",
+                "If asked by the user, reflect on the plan and suggest changes if needed"
             ],
             "tools": [
                 {
@@ -202,6 +213,53 @@ class Agent:
             Remember to use tools only when they are actually needed for the task.
         """
     
+    def create_reflection_prompt(self) -> str:
+        if not self.interaction_history:
+            return {
+                "reflection": "No interactions have occurred yet. So no plan to reflect on.",
+                "require_changes" : False
+            } 
+            
+        last_interaction = self.interaction_history[-1]
+        
+        reflection_prompt = {
+            "task": "reflection",
+            "context": {
+                "user_query": last_interaction.query,
+                "generated_plan": last_interaction.plan
+            },
+            "instructions": [
+                "Review the generated plan for potential improvements",
+                "Consider if the chosen tools are appropriate",
+                "Verify tool parameters are correct",
+                "Check if the plan is efficient",
+                "Determine if tools are actually needed"
+            ],
+            "response_format": {
+                "type": "json",
+                "schema": {
+                    "requires_changes": {
+                        "type": "boolean",
+                        "description": "whether the plan needs modifications"
+                    },
+                    "reflection": {
+                        "type": "string",
+                        "description": "explanation of what changes are needed or why no changes are needed"
+                    },
+                    "suggestions": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "specific suggestions for improvements",
+                        "optional": True
+                    }
+                }
+            }
+        }
+        
+        return f"""
+            {json.dumps(reflection_prompt, indent=4)}
+        """
+    
     def execute(self, user_query: str) -> str:
         """Execute the full pipeline: plan and execute tools."""
         
@@ -213,20 +271,70 @@ class Agent:
             plan = get_plan(user_query = user_query, system_prompt = self.create_system_prompt())
             logger.info(f"Plan: {plan}")
             
-            if not plan.get("requires_tools", True):
-                return plan["direct_response"]
+            self.interaction_history.append(Interaction(
+                timestamp = datetime.now(),
+                query = user_query,
+                plan = plan
+            ))
             
+            logger.info(f'Interaction history: {self.interaction_history}')
+            
+            reflection_result = reflect_on_plan(system_prompt = self.create_system_prompt(), reflection_prompt = self.create_reflection_prompt())
+            
+            # if not plan.get("requires_tools", True):
+            #     return plan["direct_response"]
+            
+            # results = []
+            # for tool_call in plan["tool_calls"]:
+            #     tool_name = tool_call["tool"]
+            #     tool_args = tool_call["args"]
+            #     result = self.use_tool(tool_name, **tool_args)
+            #     results.append(result)
+                
+            # return f"""
+            #     Thought: {plan['thought']} 
+            #     Plan: {'. '.join(plan['plan'])} 
+            #     Results: {'. '.join(results)}
+            # """
+            
+            if reflection_result.get("require_changes", False):
+                
+                reflected_plan = get_plan(
+                    user_query = user_query, 
+                    system_prompt = self.create_system_prompt(), 
+                    initial_plan = plan, 
+                    reflection_feedback = reflection_result
+                )
+                
+                logger.info(f'reflected plan after changes: {reflected_plan}')
+                
+                if reflected_plan:
+                    final_plan = reflected_plan
+                else:
+                    final_plan = plan
+    
+            else:
+                final_plan = plan
+                
+            self.interaction_history[-1].plan = {
+                "initial_plan": plan,
+                "reflection": reflection_result,
+                "final_plan": final_plan
+            }
+            
+            logger.info(f'Interaction history: {self.interaction_history}')
+            
+            if not final_plan.get("requires_tools", True):
+                return final_plan["direct_response"]
+                
             results = []
-            for tool_call in plan["tool_calls"]:
+            for tool_call in final_plan["tool_calls"]:
                 tool_name = tool_call["tool"]
                 tool_args = tool_call["args"]
                 result = self.use_tool(tool_name, **tool_args)
                 results.append(result)
                 
-            return f"""
-                Thought: {plan['thought']} 
-                Plan: {'. '.join(plan['plan'])} 
-                Results: {'. '.join(results)}
+            return f"""Initial Thought: {plan['thought']}\n\nInitial Plan: {'. '.join(plan['plan'])}\n\nReflection: {reflection_result.get('reflection', 'No improvements suggested')}\n\nFinal Plan: {'. '.join(final_plan['plan'])}\n\nResults: {'. '.join(results)}
             """
             
         except Exception as e:
@@ -241,7 +349,7 @@ def main():
     # agent.add_tool(google_search)
     agent.add_tool(wikipedia_search)
     
-    query_list = ["what is the capital of india?"]
+    query_list = ["what happend to donald trump recently?"]
     
     for query in query_list:
         print(f"\nQuery: {query}")

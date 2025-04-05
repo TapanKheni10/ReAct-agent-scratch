@@ -26,7 +26,7 @@ def wikipedia_search(query: str, lang: Optional[str] = 'en') -> Optional[str]:
     
         logger.info(f"Successfully retrieved data from Wikipedia for query: {query}")
         
-        return json.dumps(result, indent=4, ensure_ascii=False)
+        return result
     
     except Exception as e:
         logger.error(f'Error: {e}')

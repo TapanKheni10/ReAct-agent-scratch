@@ -47,7 +47,7 @@ class SerpAPIClient:
         }
         
         try:
-            with httpx.Client() as client:
+            with httpx.Client(timeout = 20.0) as client:
                 response = client.get(self.base_url, params=params)
                 response.raise_for_status()
                 return response.json()
@@ -137,7 +137,7 @@ def google_search(search_query: str, location: str = "") -> str:
         top_results = format_top_search_results(results=results)
         
         enriched_results = []
-        for result in top_results[:3]:
+        for result in top_results[:2]:
             try:
                 scraped_content = web_scrape(result['link'])
                 
@@ -173,7 +173,7 @@ def google_search(search_query: str, location: str = "") -> str:
             "enriched_results": enriched_results
         }
             
-        return json.dumps(response, indent=4)
+        return response
     else:
         status_code, error_message = results
         error_json = json.dumps({"error": f"Search failed with status code {status_code}: {error_message}"})

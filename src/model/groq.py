@@ -97,7 +97,7 @@ def get_plan(user_query: str, system_prompt: str, initial_plan: Dict = None, ref
                 response = client.post(groq_chat_url, headers=headers, json=payload)
                 response.raise_for_status()
                 response_data = response.json()["choices"][0]["message"]["content"]
-                return json.loads(response_data)
+                return response_data
             
         except json.JSONDecodeError as e:
             logger.info(f'failed to decode the plan: {response.json()["choices"][0]["message"]}')
@@ -143,7 +143,7 @@ def reflect_on_plan(system_prompt: str, reflection_prompt: Dict) -> Dict:
                 response_data = response.json()["choices"][0]["message"]["content"]
                 logger.info(f'response_data: {response_data}')
                 logger.info(f'response_data type: {type(response_data)}')
-                return json.loads(response_data)
+                return response_data
             
         except json.JSONDecodeError as e:
             logger.info(f'failed to decode the reflected plan: {response.json()["choices"][0]["message"]}')

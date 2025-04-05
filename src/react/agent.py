@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Optional
 from tools.tool_registery import Tool
 import json
 from typing import Any
@@ -33,10 +33,11 @@ class Agent:
         """Get list of available tool descriptions."""
         return [f"{tool.name}: {tool.description}" for tool in self.tools.values()]
     
-    def use_tool(self, tool_name: str, **kwargs) -> str:
+    def use_tool(self, tool_name: str, **kwargs) -> Optional[str]:
         """Use a registered tool with provided arguments."""
         if tool_name not in self.tools:
-            return f"Tool '{tool_name}' is not registered with the agent. Available tools: {self.get_available_tools()}"
+            logger.info(f"Tool '{tool_name}' is not registered with the agent. Available tools: {self.get_available_tools()}")
+            return False
         
         tool = self.tools[tool_name]
         return tool.func(**kwargs)
@@ -44,19 +45,6 @@ class Agent:
     def create_system_prompt(self) -> str:
         """Create the system prompt for the LLM with available tools."""
         tools_json = {
-            "role": "AI Assistant",
-            "capabilities": [
-                "Using provided tools to help users when necessary",
-                "Responding directly without tools for questions that don't require tool usage",
-                "Planning efficient tool usage sequences",
-                "If asked by the user, reflecting on the plan and suggesting changes if needed"
-            ],
-            "instructions": [
-                "Use tools only when they are necessary for the task",
-                "If a query can be answered directly, respond with a simple message instead of using tools",
-                "When tools are needed, plan their usage efficiently to minimize tool calls",
-                "If asked by the user, reflect on the plan and suggest changes if needed"
-            ],
             "tools": [
                 {
                     "name": tool.name,
@@ -70,152 +58,215 @@ class Agent:
                     }
                 }
                 for tool in self.tools.values()
-            ],
-            "response_format": {
-                "type": "json",
-                "schema": {
-                    "requires_tools": {
-                        "type": "boolean",
-                        "description": "whether tools are needed for this query"
-                    },
-                    "direct_response": {
-                        "type": "string",
-                        "description": "response when no tools are needed",
-                        "optional": True
-                    },
-                    "thought": {
-                        "type": "string", 
-                        "description": "reasoning about how to solve the task (when tools are needed)",
-                        "optional": True
-                    },
-                    "plan": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "steps to solve the task (when tools are needed)",
-                        "optional": True
-                    },
-                    "tool_calls": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "tool": {
-                                    "type": "string",
-                                    "description": "name of the tool"
-                                },
-                                "args": {
-                                    "type": "object",
-                                    "description": "parameters for the tool"
-                                }
-                            }
+            ]
+        }
+        
+        response_format_json = {
+            "requires_tools": {
+                "type": "boolean",
+                "description": "whether tools are needed for this query"
+            },
+            "direct_response": {
+                "type": "string",
+                "description": "response when no tools are needed",
+                "optional": True
+            },
+            "thought": {
+                "type": "string", 
+                "description": "reasoning about how to solve the task (when tools are needed)",
+                "optional": True
+            },
+            "plan": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "steps to solve the task (when tools are needed)",
+                "optional": True
+            },
+            "tool_calls": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "tool": {
+                            "type": "string",
+                            "description": "name of the tool"
                         },
-                        "description": "tools to call in sequence (when tools are needed)",
-                        "optional": True
+                        "args": {
+                            "type": "object",
+                            "description": "parameters for the tool"
+                        }
                     }
                 },
-                "examples": [
-                    {
-                        "query": "Who is the president of the United States?",
-                        "response": {
-                            "requires_tools": True,
-                            "thought": "I need to use the Wikipedia tool to look up the current president of the United States.",
-                            "plan": [
-                                "Use Wikipedia tool to search for the current president of the United States",
-                                "Return the result from Wikipedia"
-                            ],
-                            "tool_calls": [
-                                {
-                                    "tool": "wikipedia_search",
-                                    "args": {
-                                        "query": "current president of the United States"
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    {
-                        "query": "Where is the Eiffel Tower located?",
-                        "response": {
-                            "requires_tools": False,
-                            "direct_response": "The Eiffel Tower is located in Paris, France. This is common knowledge that doesn't require using the search tool."
-                        }
-                    },
-                    {
-                        "query": "What is the capital of Japan?",
-                        "response": {
-                            "requires_tools": False,
-                            "direct_response": "The capital of Japan is Tokyo. This is general knowledge and does not require using external tools."
-                        }
-                    },
-                    {
-                        "query": "Who is Albert Einstein?",
-                        "response": {
-                            "requires_tools": True,
-                            "thought": "I need to use the Wikipedia tool to get information about Albert Einstein.",
-                            "plan": [
-                                "Use Wikipedia tool to search for information about Albert Einstein",
-                                "Return the result from Wikipedia"
-                            ],
-                            "tool_calls": [
-                                {
-                                    "tool": "wikipedia_search",
-                                    "args": {
-                                        "query": "Albert Einstein"
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    {
-                        "query": "What happend in the recent match between RR and KKR?",
-                        "response": {
-                            "requires_tools": True,
-                            "thought": "I need to use the Google search tool to get information about the recent match between RR and KKR.",
-                            "plan": [
-                                "Use Google search tool to search for information about the recent match between RR and KKR",
-                                "Return the result from Google"
-                            ],
-                            "tool_calls": [
-                                {
-                                    "tool": "google_search",
-                                    "args": {
-                                        "search_query" : "recent match between RR and KKR"
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    {
-                        "query" : "what happend to donald trump recently?",
-                        "response": {
-                            "requires_tools": True,
-                            "thought": "I need to use the Google search tool to get information about Donald Trump.",
-                            "plan": [
-                                "Use Google search tool to search for information about Donald Trump",
-                                "Return the result from Google"
-                            ],
-                            "tool_calls": [
-                                {
-                                    "tool": "google_search",
-                                    "args": {
-                                        "search_query" : "recent news about Donald Trump"
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                ]
+                "description": "tools to call in sequence (when tools are needed)",
+                "optional": True
             }
+        }
+        
+        examples_json = {        
+            "examples": [
+                {
+                    "query": "Who is the current Prime Minister of the United Kingdom?",
+                    "response": {
+                        "requires_tools": True,
+                        "thought": "I need to use the Wikipedia tool to look up the current Prime Minister of the United Kingdom.",
+                        "plan": [
+                            "Use Wikipedia tool to search for the current Prime Minister of the United Kingdom",
+                            "Return the result from Wikipedia"
+                        ],
+                        "tool_calls": [
+                            {
+                                "tool": "wikipedia_search",
+                                "args": {
+                                    "query": "current Prime Minister of the United Kingdom"
+                                }
+                            }
+                        ]
+                    }
+                },
+                {
+                    "query": "Where is the Eiffel Tower located?",
+                    "response": {
+                        "requires_tools": False,
+                        "direct_response": "The Eiffel Tower is located in Paris, France. This is common knowledge that doesn't require using the search tool."
+                    }
+                },
+                {
+                    "query": "What is the capital of Canada?",
+                    "response": {
+                        "requires_tools": False,
+                        "direct_response": "The capital of Canada is Ottawa. This is common knowledge that doesn't require using the search tool."
+                    }
+                },
+                {
+                    "query": "Who discovered penicillin?",
+                    "response": {
+                        "requires_tools": False,
+                        "direct_response": "Penicillin was discovered by Alexander Fleming in 1928. This is general knowledge and does not require using external tools."
+                    }
+                },
+                {
+                    "query": "Who is Albert Einstein?",
+                    "response": {
+                        "requires_tools": True,
+                        "thought": "I need to use the Wikipedia tool to get information about Albert Einstein.",
+                        "plan": [
+                            "Use Wikipedia tool to search for information about Albert Einstein",
+                            "Return the result from Wikipedia"
+                        ],
+                        "tool_calls": [
+                            {
+                                "tool": "wikipedia_search",
+                                "args": {
+                                    "query": "Albert Einstein"
+                                }
+                            }
+                        ]
+                    }
+                },
+                {
+                    "query": "Tell me about the theory of relativity.",
+                    "response": {
+                        "requires_tools": True,
+                        "thought": "I need to use the Wikipedia tool to get detailed information about the theory of relativity.",
+                        "plan": [
+                            "Use Wikipedia tool to search for information about the theory of relativity",
+                            "Return the result from Wikipedia"
+                        ],
+                        "tool_calls": [
+                            {
+                                "tool": "wikipedia_search",
+                                "args": {
+                                    "query": "theory of relativity"
+                                }
+                            }
+                        ]
+                    }
+                },
+                {
+                    "query": "What was the outcome of the recent UEFA Champions League final?",
+                    "response": {
+                        "requires_tools": True,
+                        "thought": "I need to use the Google search tool to get the latest result of the UEFA Champions League final.",
+                        "plan": [
+                            "Use Google search tool to find information about the most recent UEFA Champions League final",
+                            "Return the result from Google"
+                        ],
+                        "tool_calls": [
+                            {
+                                "tool": "google_search",
+                                "args": {
+                                    "search_query": "latest UEFA Champions League final result"
+                                }
+                            }
+                        ]
+                    }
+                },
+                {
+                    "query": "What are the latest updates about Elon Musk?",
+                    "response": {
+                        "requires_tools": True,
+                        "thought": "I need to use the Google search tool to get the latest news about Elon Musk.",
+                        "plan": [
+                            "Use Google search tool to find the most recent news related to Elon Musk",
+                            "Return the result from Google"
+                        ],
+                        "tool_calls": [
+                            {
+                                "tool": "google_search",
+                                "args": {
+                                    "search_query": "latest news about Elon Musk"
+                                }
+                            }
+                        ]
+                    }
+                }
+            ]
         }
         
         return f"""
             You are an AI assistant that helps users by providing direct answers or using tools when necessary.
             Configuration, instructions, and available tools are provided in JSON format below:
+            
+            ## Role and Capabilities
+            - Use provided tools to help users when necessary
+            - Respond directly without tools for questions that don't require tool usage
+            - Plan efficient tool usage sequences 
+            - Reflect on your plan when asked by the user
+            - Handle tool failures gracefully with fallback options
+            
+            ## Instructions
+            1. Use tools ONLY when they meet these criteria:
+            - The question requires up-to-date information beyond your knowledge cutoff
+            - The question requires specific data you don't have access to
+            - The task explicitly requires a specialized tool (calculation, search, etc.)
+            - The answer would be significantly more accurate with tool usage
 
+            2. Respond directly WITHOUT tools when:
+            - The query is about general knowledge within your training
+            - The query is conversational or opinion-based
+            - The query can be answered with logical reasoning
+            - The query is about hypothetical scenarios
+
+            3. When using tools:
+            - Plan their usage efficiently to minimize tool calls
+            - Consider dependencies between tools
+            - Start with the most relevant tool first
+            - Process and synthesize tool outputs into coherent responses
+            - If a tool fails, try an alternative approach or explain the limitation
+
+            4. When asked, explain your reasoning for using or not using tools
+            
+            ## Available Tools
             {json.dumps(tools_json, indent=4)}
+            
+            ## Response Format
+            {json.dumps(response_format_json, indent=4)}
+            
+            ## Examples
+            {json.dumps(examples_json, indent=4)}
 
             Always respond with a JSON object following the response_format schema above. 
-            Remember to use tools only when they are actually needed for the task.
+            Remember that your goal is to help the user effectively - tools are means to an end, not the end itself.
         """
     
     def create_reflection_prompt(self) -> str:
@@ -262,7 +313,13 @@ class Agent:
         }
         
         return f"""
+            You are conducting a critical review of an AI assistant's plan for using tools to answer a user query.
+            Your task is to identify improvements that would make the plan more effective, appropriate, and efficient.
+            
             {json.dumps(reflection_prompt, indent=4)}
+            
+            Remember that the goal is to provide actionable feedback that can improve how the assistant handles similar queries in the future.
+            Always respond with a JSON object following the response_format schema above.
         """
     
     def execute(self, user_query: str, max_reflection_iterations: int = 3) -> str:
@@ -270,11 +327,18 @@ class Agent:
         
         result = safety_check(content = user_query)
         if "unsafe" in result:
+            print("Unsafe content detected. Please rephrase your query.")
             return "the answer contains harmful content."
         
         try:
             initial_plan = get_plan(user_query = user_query, system_prompt = self.create_system_prompt())
             logger.info(f"Initial Plan: {initial_plan}")
+            
+            print('=*='*40)
+            print(f"\nInitial plan:\n{initial_plan}")
+            print('=*='*40)
+            
+            initial_plan = json.loads(initial_plan)
             
             self.interaction_history.append(Interaction(
                 timestamp = datetime.now(),
@@ -283,6 +347,9 @@ class Agent:
             ))
             
             logger.info(f'Interaction history: {self.interaction_history}')
+            
+            print(f"\nInteraction History:\n{self.interaction_history}")
+            print('=*='*40)
             
             if not initial_plan.get("requires_tools", True):
                 logger.info("Initial plan doesn't require tools. Skipping reflection loop.")
@@ -293,6 +360,7 @@ class Agent:
             
             for iteration in range(max_reflection_iterations):
                 self.interaction_history[-1].plan = current_plan
+                self.interaction_history[-1].timestamp = datetime.now()
                 
                 try:
                     reflection_result = reflect_on_plan(
@@ -300,11 +368,18 @@ class Agent:
                         reflection_prompt = self.create_reflection_prompt()
                     )
                     logger.info(f"Reflection {iteration + 1} Result: {reflection_result}")
+                    
+                    print(f"\nReflection {iteration + 1}:\n{reflection_result}")
+                    print('=*='*40)
+                    
+                    reflection_result = json.loads(reflection_result)
                 
                     reflection_history.append(reflection_result)
                     
                     if not reflection_result.get("requires_changes", False):
                         logger.info("No changes required. Exiting reflection loop.")
+                        print("\nNo changes required. Exiting reflection loop.")
+                        print('=*='*40)
                         break
                     
                     revised_plan = get_plan(
@@ -315,10 +390,16 @@ class Agent:
                     )
                     
                     if not revised_plan:
-                        logger.info(f"Failed to generate revised plan after reflection {iteration+1}")   
+                        logger.info(f"Failed to generate revised plan after reflection {iteration+1}")
+                        print(f"\nFailed to generate revised plan after reflection {iteration+1}")
+                        print('=*='*40)   
                         continue
                     
                     logger.info(f"Revised Plan after reflection {iteration+1}: {revised_plan}")
+                    print(f"\nRevised plan after iteration {iteration + 1}:\n{revised_plan}")
+                    print("=*="*40)
+                    
+                    revised_plan = json.loads(revised_plan)
                     
                     current_plan = revised_plan
                 
@@ -349,9 +430,23 @@ class Agent:
                 tool_name = tool_call["tool"]
                 tool_args = tool_call["args"]
                 result = self.use_tool(tool_name, **tool_args)
+                
+                if not result:
+                    continue
                 results.append(result)
                 
+            final_content = ""
+            if "enriched_results" in results[0]:
+                for result in results[0]["enriched_results"]:
+                    final_content += f"{result['title']}:\n{result['summary']}\n\n"
+            else:
+                final_content = results[0]["summary"]
+                
             logger.info(f"Results: {results}")
+            
+            print('=*='*35)
+            print(final_content)
+            print('=*='*35)
                 
             reflection_summary = "\n\n".join([
                 f"Reflection {i+1}: {reflection['reflection']}" 
@@ -373,7 +468,9 @@ def main():
     agent.add_tool(google_search)
     agent.add_tool(wikipedia_search)
     
-    query_list = ["what happen to donald trump recently?"]
+    query_list = ["recent news about waqf board."]
+    # query_list = ["who is the president of the united states?"]
+    # query_list = ["tell me something about how to kill someone."]
     
     for query in query_list:
         print(f"\nQuery: {query}")

@@ -16,6 +16,10 @@ def wikipedia_search(query: str, lang: Optional[str] = 'en') -> Optional[str]:
     Returns:
         Optional[str]: A JSON string containing the query and its summary if successful, or None if an error occurs.
     """
+    
+    if not query or not isinstance(query, str):
+        logger.warning("Empty or invalid query provided to wikipedia_search")
+        
     try:
         logger.info(f"Searching for {query} in {lang} through Wikipedia...")
         wikipedia.set_lang(lang)

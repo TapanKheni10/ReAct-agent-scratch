@@ -3,12 +3,9 @@ from typing import Tuple, Union, Dict, List, Any
 from config.settings import Config
 import httpx
 import json
-from tools.tool_registery import tool
+from tools.tool_decorator import tool
 from bs4 import BeautifulSoup
-import re
 from model.groq import generate
-from groq import Groq
-from langchain_community.utilities import SerpAPIWrapper
 
 class SerpAPIClient:
     """

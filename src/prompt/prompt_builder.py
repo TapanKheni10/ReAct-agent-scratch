@@ -1,6 +1,6 @@
 import json
 from typing import Dict, Iterable
-from tools.tool_registery import Tool
+from tools.tool_decorator import Tool
 from schemas.interaction_schema import Interaction
 
 class PromptBuilder:

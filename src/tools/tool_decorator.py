@@ -1,4 +1,4 @@
-from typing import Callable, Any, Dict, get_type_hints
+from typing import Callable, Dict
 from config.logging import logger
 from dataclasses import dataclass
 import inspect
@@ -13,9 +13,6 @@ class Tool:
     
     def __call__(self, *args, **kwargs) -> str:
         return self.func(*args, **kwargs)
-    
-    
-TOOL_REGISTRY = {}
 
 def parse_docstring(docstring: str) -> Dict[str, str]:
     """

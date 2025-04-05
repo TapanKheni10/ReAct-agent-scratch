@@ -1,5 +1,5 @@
 from typing import Dict, List, Optional
-from tools.tool_registery import Tool
+from tools.tool_decorator import Tool
 import json
 from typing import Any
 from config.logging import logger
@@ -67,8 +67,10 @@ class Agent:
         if "unsafe" in result:
             print("Unsafe content detected. Please rephrase your query.")
             return {
-                "warning" : "the answer contains harmful content.",
-                "status" : "failed"
+                "warning": "The query contains potentially harmful content.",
+                "status": "failed",
+                "error_type": "content_safety",
+                "original_query": user_query 
             }
         
         try:
@@ -188,11 +190,15 @@ class Agent:
             logger.error(f"Failed to parse JSON: {e}")
             return {
                 "error" : "I encountered an error processing your request. Please try again.",
-                "status" : "failed" 
+                "status" : "failed" ,
+                "error_type": "json_parse",
+                "details": str(e)
             }
         except Exception as e:
             logger.error(f'An error occurred while executing the plan: {e}', exc_info = True)
             return {
                 "error" : "An unexpected error occurred. Please try again later.",
-                "status" : "failed"
+                "status" : "failed",
+                "error_type": "general",
+                "details": str(e)
             }

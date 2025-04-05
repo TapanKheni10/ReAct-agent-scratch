@@ -1,7 +1,7 @@
 from config.logging import logger
 from typing import Optional
 import json
-from tools.tool_registery import tool
+from tools.tool_decorator import tool
 import wikipedia
 
 @tool()

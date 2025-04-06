@@ -1,14 +1,15 @@
-from typing import Dict, List, Optional
+from typing import Dict, List
 from tools.tool_decorator import Tool
 import json
 from typing import Any
 from config.logging import logger
-from model.groq import safety_check, get_plan, reflect_on_plan
-from dataclasses import dataclass
+from model.groq import safety_check, get_plan
 from datetime import datetime
 from prompt.prompt_builder import PromptBuilder
 from schemas.interaction_schema import Interaction
 from react.plan_executor import PlanExecutor
+from react.reflection_engine import ReflectionEngine
+from memory.interaction_history import state_manager, StateManager
     
 class Agent:
     """
@@ -26,10 +27,11 @@ class Agent:
     def __init__(self):
         """Initialize Agent with empty tool registry."""
         self._tools: Dict[str, Tool] = {}
-        self._interaction_history: List[Interaction] = []
+        self._interaction_manager: StateManager = state_manager 
         self._prompt_builder = PromptBuilder()
         self._plan_executor = PlanExecutor(tools_registry = self._tools)
-        
+        self._reflection_engine = ReflectionEngine()
+    
     def add_tool(self, tool: Tool) -> None:
         """Register a new tool with the agent."""
         self._tools[tool.name] = tool
@@ -41,17 +43,6 @@ class Agent:
     def create_system_prompt(self) -> str:
         """Create the system prompt for the LLM with available tools."""
         return self._prompt_builder.build_system_prompt(tools = self._tools.values())
-    
-    def create_reflection_prompt(self) -> str:
-        if not self._interaction_history:
-            return {
-                "reflection": "No interactions have occurred yet. So no plan to reflect on.",
-                "require_changes" : False
-            } 
-            
-        last_interaction = self._interaction_history[-1]
-        
-        return self._prompt_builder.build_reflection_prompt(last_interaction = last_interaction)
     
     def execute(self, user_query: str, max_reflection_iterations: int = 3) -> Dict[str, Any]:
         """Execute the full pipeline: plan and execute tools."""
@@ -83,15 +74,17 @@ class Agent:
             
             initial_plan = json.loads(initial_plan)
             
-            self._interaction_history.append(Interaction(
-                timestamp = datetime.now(),
-                query = user_query,
-                plan = initial_plan
-            ))
+            self._interaction_manager.add_interaction(
+                interaction = Interaction(
+                    timestamp = datetime.now(),
+                    query = user_query,
+                    plan = initial_plan
+                )
+            )
             
-            logger.info(f'Interaction history: {self._interaction_history}')
+            logger.info(f'Interaction history: {self._interaction_manager.get_interaction_history()}')
             
-            print(f"\nInteraction History:\n{self._interaction_history}")
+            print(f"\nInteraction History:\n{self._interaction_manager.get_interaction_history()}")
             print('=*='*40)
             
             if not initial_plan["requires_tools"]:
@@ -100,72 +93,30 @@ class Agent:
                     "response" : initial_plan["direct_response"],
                     "status" : "success"
                 }
-            
-            current_plan = initial_plan
-            reflection_history = []
-            
-            for iteration in range(max_reflection_iterations):
-                self._interaction_history[-1].plan = current_plan
-                self._interaction_history[-1].timestamp = datetime.now()
                 
-                try:
-                    reflection_result = reflect_on_plan(
-                        system_prompt = self.create_system_prompt(),
-                        reflection_prompt = self.create_reflection_prompt()
-                    )
-
-                    print(f"\nReflection {iteration + 1}:\n{reflection_result}")
-                    print('=*='*40)
-                    
-                    reflection_result = json.loads(reflection_result)
+            reflection_result = self._reflection_engine.reflect_and_improve(
+                user_query = user_query,
+                initial_plan = initial_plan,
+                system_prompt = self.create_system_prompt(),
+            )
                 
-                    reflection_history.append(reflection_result)
-                    
-                    if not reflection_result.get("requires_changes", False):
-                        logger.info("No changes required. Exiting reflection loop.")
-                        print("\nNo changes required. Exiting reflection loop.")
-                        print('=*='*40)
-                        break
-                    
-                    revised_plan = get_plan(
-                        user_query = user_query,
-                        system_prompt = self.create_system_prompt(),
-                        initial_plan = current_plan,
-                        reflection_feedback = reflection_result
-                    )
-                    
-                    if not revised_plan:
-                        logger.info(f"Failed to generate revised plan after reflection {iteration+1}")
-                        print(f"\nFailed to generate revised plan after reflection {iteration+1}")
-                        print('=*='*40)   
-                        continue
-                    
-                    print(f"\nRevised plan after iteration {iteration + 1}:\n{revised_plan}")
-                    print("=*="*40)
-                    
-                    revised_plan = json.loads(revised_plan)
-                    
-                    current_plan = revised_plan
-                
-                except Exception as e:
-                    logger.error(f"Error during reflection iteration {iteration+1}: {e}")
-                    reflection_history.append({
-                        "reflection": f"Reflection failed due to error: {str(e)}",
-                        "requires_changes": False
-                    })
-                    
-                    continue
-                
-            final_plan = current_plan
+            final_plan = reflection_result["final_plan"]
+            reflection_history = reflection_result["reflection_history"]
             
             print(f"\nFinal plan:\n{final_plan}")
             print("=*="*40)
             
-            self._interaction_history[-1].plan = {
-                "initial_plan": initial_plan,
-                "reflection": reflection_history,
-                "final_plan": final_plan
-            }
+            self._interaction_manager.add_interaction(
+                interaction = Interaction(
+                    timestamp = datetime.now(),
+                    query = user_query,
+                    plan = {
+                        "initial_plan": initial_plan,
+                        "reflection": reflection_history,
+                        "final_plan": final_plan
+                    }
+                )
+            )
             
             final_content = self._plan_executor.execute_plan(plan = final_plan)
                 

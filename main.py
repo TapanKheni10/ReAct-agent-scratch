@@ -2,6 +2,7 @@
 
 import argparse
 from src.tools.serp import google_search
+from src.tools.weather import get_weather
 from src.react.agent import Agent
 
 def parse_args():
@@ -36,6 +37,7 @@ def main():
     
     agent = Agent()
     agent.add_tool(google_search)
+    agent.add_tool(get_weather)
     
     if args.interactive:
         interactive_mode(agent)

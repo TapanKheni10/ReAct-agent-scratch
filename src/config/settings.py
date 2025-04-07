@@ -9,5 +9,6 @@ class Settings(BaseSettings):
     SERP_API_KEY: str
     GROQ_API_KEY: str
     SERPER_DEV_API_KEY: str
+    OPEN_WEATHER_API_KEY: str
     
 Config = Settings()

@@ -258,6 +258,25 @@ class PromptBuilder:
                             }
                         ]
                     }
+                },
+                {
+                    "query": "What's the current weather in San Francisco?",
+                    "response": {
+                        "requires_tools": True,
+                        "thought": "I need to use the weather tool to get the current weather conditions in San Francisco.",
+                        "plan": [
+                            "Use the weather tool to fetch current weather data for San Francisco",
+                            "Return the weather information to the user"
+                        ],
+                        "tool_calls": [
+                            {
+                                "tool": "get_weather",
+                                "args": {
+                                    "location": "San Francisco"
+                                }
+                            }
+                        ]
+                    }
                 }
             ]
         }

@@ -38,6 +38,11 @@ class PromptBuilder:
             - The query is about hypothetical scenarios
 
             3. When using tools:
+            - ALWAYS use multiple tools when different tools can provide complementary information for the task
+            - ALWAYS use the tools that are provided to you, don't fabricate tools by yourself,
+            - NEVER use the same tool twice with identical input parameters - this creates redundant calls
+            - If you need multiple pieces of related information, use different tools or vary the parameters
+            - For complex queries, break down the task and use different specialized tools for each component
             - Plan their usage efficiently to minimize tool calls
             - Consider dependencies between tools
             - Start with the most relevant tool first
@@ -291,6 +296,9 @@ class PromptBuilder:
             },
             "instructions": [
                 "Review the generated plan for potential improvements",
+                "ALWAYS STRICTLY use the tools that are provided to you, don't fabricate tools by yourself,"
+                "Verify that multiple appropriate tools are used when the query has multiple aspects",
+                "Check that no tool is called multiple times with identical or semantically identical parameters",
                 "Consider if the chosen tools are appropriate",
                 "Verify tool parameters are correct",
                 "Check if the plan is efficient",
